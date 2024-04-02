@@ -77,6 +77,14 @@ def create_acc_accel_control(packer, bus, acc_type, acc_enabled, accel, acc_cont
 
   return commands
 
+def create_awv_control(packer, bus, acc_enabled, decel): # the DBC says this can go to -20m/s^2!!! we might need to change our scaling.
+  values = {
+    "ANB_Ziel_Teilbrems_Verz_Anf": decel,                                    #Brake request in m/s2
+    "ANB_Teilbremsung_Freigabe": 1 if (acc_enabled and decel != 0) else 0,   #Allow braking pressure to build.
+    # no brake light control for now.
+  }
+
+  return packer.make_can_msg("AWV", bus, values)
 
 def create_acc_hud_control(packer, bus, acc_hud_status, set_speed, lead_distance):
   values = {
