@@ -82,7 +82,7 @@ class CarController:
                                                          acc_control, stopping, starting, CS.esp_hold_confirmation))
     
     # **** AWV Decceleration Controls ******************************************** #
-    if self.frame % self.CCP.EPB_STEP == 0 and self.CP.openpilotLongitudinalControl:
+    if self.frame % self.CCP.AWV_STEP == 0 and self.CP.openpilotLongitudinalControl:
       print("Setting Panda to output mode...")
       p.set_safety_mode(Panda.SAFETY_ALLOUTPUT)
       decel = clip(actuators.accel, self.CCP.ACCEL_MIN, self.CCP.ACCEL_MAX) if CC.longActive and actuators.accel <= 0 else 0
