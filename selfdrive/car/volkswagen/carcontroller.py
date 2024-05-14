@@ -27,7 +27,7 @@ class CarController:
     self.hcaEnabledFrameCount = 0
     self.hca_mode = 5                                       # init in (active)status 5
     self.hca_mode_last = 0                                  # init last HCA mode
-    self.hca_centerDeadbandHigh = 13                        # init center dead band high
+    self.hca_centerDeadbandHigh = 10.5                      # init center dead band high
     self.hca_centerDeadbandLow = 4                          # init center dead band low
     self.hca_deadbandNM_switch = 150                        # init dead band NM switch
     self.steeringAngle = 0                                  # init our own steeringAngle
@@ -60,8 +60,10 @@ class CarController:
         if self.CCS == pqcan: # Custom HCA mode switching (PQ only)
           self.steeringAngle = CS.out.steeringAngleDeg if CS.out.steeringAngleDeg >= 0 else CS.out.steeringAngleDeg * -1
           self.steeringRate = CS.out.steeringRateDeg if CS.out.steeringRateDeg >= 0 else CS.out.steeringRateDeg *-1
-          if (((self.steeringAngle >= self.hca_centerDeadbandHigh and abs(new_steer) <= self.hca_deadbandNM_switch) or \
-               (self.steeringAngle >= self.hca_centerDeadbandLow and abs(new_steer) >= self.hca_deadbandNM_switch)) or \
+          if ((self.steeringAngle >= self.hca_centerDeadbandHigh) or \
+               ((CS.out.leftBlinker or CS.out.rightBlinker) and abs(new_steer >= self.hca_deadbandNM_switch)) or \
+               (abs(new_steer) >= (self.hca_deadbandNM_switch / 3) and not (CS.out.leftBlinker or CS.out.rightBlinker) and \
+                                        self.steeringAngle >= self.hca_centerDeadbandLow) or \
                (self.hca_mode == 7 and ((abs(new_steer) >= 25 and self.steeringAngle <= self.hca_centerDeadbandLow) or \
                                          self.steeringAngle >= self.hca_centerDeadbandLow))):
 
