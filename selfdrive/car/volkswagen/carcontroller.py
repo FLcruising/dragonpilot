@@ -23,6 +23,8 @@ class CarController:
     self.frame = 0
     self.hcaSameTorqueCount = 0
     self.hcaEnabledFrameCount = 0
+    self.EPB_brake = 0
+    self.EPB_enable = 0
 
   def update(self, CC, CS, ext_bus, now_nanos):
     actuators = CC.actuators
@@ -73,9 +75,21 @@ class CarController:
 
     if self.frame % self.CCP.ACC_CONTROL_STEP == 0 and self.CP.openpilotLongitudinalControl:
       acc_control = self.CCS.acc_control_value(CS.out.cruiseState.available, CS.out.accFaulted, CC.longActive)
-      accel = clip(actuators.accel, self.CCP.ACCEL_MIN, self.CCP.ACCEL_MAX) if CC.longActive else 0
       stopping = actuators.longControlState == LongCtrlState.stopping
-      starting = actuators.longControlState == LongCtrlState.starting
+      starting = actuators.longControlState == LongCtrlState.pid and (CS.esp_hold_confirmation or CS.out.vEgo < self.CP.vEgoStopping)
+      if self.CCS == pqcan and CC.longActive and (clip(actuators.accel, self.CCP.ACCEL_MIN, self.CCP.ACCEL_MAX) <= 0) and CS.out.vEgoRaw <= 5:
+        accel = 0
+        stopping = 1 if CS.out.vEgoRaw <= 3 else 0
+        if not self.EPB_enable:
+          self.EPB_enable = 1
+          self.EPB_brake = 0
+        else:
+          self.EPB_brake = clip(actuators.accel, self.CCP.ACCEL_MIN, 0)
+      else:
+        accel = clip(actuators.accel, self.CCP.ACCEL_MIN, self.CCP.ACCEL_MAX) if CC.longActive else 0
+        self.EPB_enable = 0
+        self.EPB_brake = 0
+      can_sends.append(self.CCS.create_epb_control(self.packer_pt, CANBUS.br, self.EPB_brake, self.EPB_enable))
       can_sends.extend(self.CCS.create_acc_accel_control(self.packer_pt, CANBUS.pt, CS.acc_type, CC.longActive, accel,
                                                          acc_control, stopping, starting, CS.esp_hold_confirmation))
 
