@@ -66,7 +66,7 @@ def create_acc_accel_control(packer, bus, acc_type, acc_enabled, accel, acc_cont
     "ACS_Sta_ADR": acc_control,
     "ACS_StSt_Info": acc_enabled,
     "ACS_Typ_ACC": acc_type,
-    "ACS_Anhaltewunsch": acc_type == 1 and stopping,
+    "ACS_Anhaltewunsch": 0,
     "ACS_FreigSollB": acc_enabled,
     "ACS_Sollbeschl": accel if acc_enabled else 3.01,
     "ACS_zul_Regelabw": 0.2 if acc_enabled else 1.27,
@@ -76,6 +76,23 @@ def create_acc_accel_control(packer, bus, acc_type, acc_enabled, accel, acc_cont
   commands.append(packer.make_can_msg("ACC_System", bus, values))
 
   return commands
+
+def create_epb_control(packer, bus, apply_brake, epb_enabled):
+
+  values = {
+    "EP1_Fehler_Sta": 0,
+    "EP1_Sta_EPB": 0,
+    "EP1_Spannkraft": 0,
+    "EP1_Schalterinfo": 0,
+    "EP1_Fkt_Lampe": 0,
+    "EP1_Verzoegerung": apply_brake,                        #Brake request in m/s2
+    "EP1_Freigabe_Ver": 1 if epb_enabled else 0,            #Allow braking pressure to build.
+    "EP1_Bremslicht": 1 if apply_brake != 0 else 0,         #Enable brake lights
+    "EP1_HydrHalten": 1 if epb_enabled else 0,              #Disengage DSG
+    "EP1_AutoHold_aktiv": 1,                                #Signal indicating EPB is available
+  }
+
+  return packer.make_can_msg("EPB_1", bus, values)
 
 
 def create_acc_hud_control(packer, bus, acc_hud_status, set_speed, lead_distance):
