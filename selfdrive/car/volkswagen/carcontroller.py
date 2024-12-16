@@ -10,6 +10,49 @@ from selfdrive.car.volkswagen.values import CANBUS, PQ_CARS, CarControllerParams
 VisualAlert = car.CarControl.HUDControl.VisualAlert
 LongCtrlState = car.CarControl.Actuators.LongControlState
 
+def limit_jerk(accel, prev_accel, max_jerk, dt):
+  max_delta_accel = max_jerk * dt
+  delta_accel = max(-max_delta_accel, min(accel - prev_accel, max_delta_accel))
+  return prev_accel + delta_accel
+
+def EPB_handler(CS, self, ACS_Sta_ADR, ACS_Sollbeschl, vEgo, stopping):
+  if ACS_Sta_ADR == 1 and ACS_Sollbeschl < 0 and vEgo <= (18 * CV.KPH_TO_MS):
+      if not self.EPB_enable:  # First frame of EPB entry
+          self.EPB_counter = 0
+          self.EPB_brake = 0
+          self.EPB_enable = 1
+          self.EPB_brake_last = ACS_Sollbeschl
+      else:
+          self.EPB_brake = limit_jerk(-4, self.EPB_brake_last, 0.7, 0.02) if stopping else ACS_Sollbeschl
+          self.EPB_brake_last = self.EPB_brake
+      self.EPB_counter += 1
+  else:
+      if self.EPB_enable and self.EPB_counter < 10:  # Keep EPB_enable active for 10 frames
+          self.EPB_counter += 1
+      else:
+          self.EPB_brake = 0
+          self.EPB_enable = 0
+
+  if CS.out.gasPressed or CS.out.brakePressed:
+    if self.EPB_enable:
+      self.ACC_anz_blind = 1
+    self.EPB_brake = 0
+    self.EPB_enable = 0
+    self.EPB_enable_prev = 0
+    self.EPB_enable_2old = 0
+
+  if self.ACC_anz_blind and self.ACC_anz_blind_counter < 150:
+    self.ACC_anz_blind_counter += 1
+  else:
+    self.ACC_anz_blind = 0
+    self.ACC_anz_blind_counter = 0
+
+  # Update EPB historical states and calculate EPB_active
+  self.EPB_active = int((self.EPB_enable_2old and not self.EPB_enable) or self.EPB_enable)
+  self.EPB_enable_2old = self.EPB_enable_prev
+  self.EPB_enable_prev = self.EPB_enable
+
+  return self.EPB_enable, self.EPB_brake, self.EPB_active
 
 class CarController:
   def __init__(self, dbc_name, CP, VM):
@@ -20,9 +63,28 @@ class CarController:
 
     self.apply_steer_last = 0
     self.gra_acc_counter_last = None
+    self.bremse8_counter_last = None
+    self.bremse11_counter_last = None
+    self.acc_sys_counter_last = None
+    self.acc_anz_counter_last = None
+    self.ACC_anz_blind = 0
+    self.ACC_anz_blind_counter = 0
     self.frame = 0
     self.hcaSameTorqueCount = 0
     self.hcaEnabledFrameCount = 0
+    self.accel_last = 0
+    self.EPB_brake = 0
+    self.EPB_brake_last = 0
+    self.EPB_enable = 0
+    self.EPB_enable_prev = 0
+    self.EPB_enable_2old = 0
+    self.EPB_active = 0
+    self.EPB_counter = 0
+    self.accel_diff = 0
+    self.long_deviation = 0
+    self.long_jerklimit = 0
+    self.stopped = 0
+    self.stopping = 0
 
   def update(self, CC, CS, ext_bus, now_nanos):
     actuators = CC.actuators
@@ -97,19 +159,32 @@ class CarController:
       can_sends.append(self.CCS.create_acc_hud_control(self.packer_pt, CANBUS.pt, acc_hud_status, set_speed,
                                                        lead_distance))
 
-    # **** Stock ACC Button Controls **************************************** #
+    # *** Below here is for OEM+ behavior modification of OEM ACC *** #
+    # Modify Motor_2, Bremse_8, Bremse_11
+    self.stopping = CS.acc_sys_stock["ACS_Anhaltewunsch"] and (CS.out.vEgoRaw <= 1 or self.stopping)
+    self.stopped = self.EPB_enable and (CS.out.vEgoRaw == 0 or (self.stopping and self.stopped))
 
-    if self.CP.pcmCruise and CS.gra_stock_values["COUNTER"] != self.gra_acc_counter_last:  # send just after stock
-      standing_resume_spam = CS.out.cruiseState.standstill and self.CP.carFingerprint in STANDING_RESUME_SPAM_CARS
-      spam_window = self.frame % 50 < 25  # 0.25 second gap between virtual button presses
+    if CS.acc_sys_stock["COUNTER"] != self.acc_sys_counter_last:
+      EPB_handler(CS, self, CS.acc_sys_stock["ACS_Sta_ADR"], CS.acc_sys_stock["ACS_Sollbeschl"], CS.out.vEgoRaw, self.stopping)
+      can_sends.append(self.CCS.filter_ACC_System(self.packer_pt, CANBUS.pt, CS.acc_sys_stock, self.EPB_active))
+      can_sends.append(self.CCS.create_epb_control(self.packer_pt, CANBUS.br, self.EPB_brake, self.EPB_enable))
+      can_sends.append(self.CCS.filter_epb1(self.packer_pt, CANBUS.cam, self.stopped))  # in custom module, filter the gateway fwd EPB msg
+    if CS.acc_anz_stock["COUNTER"] != self.acc_anz_counter_last:
+      can_sends.append(self.CCS.filter_ACC_Anzeige(self.packer_pt, CANBUS.pt, CS.acc_anz_stock, self.ACC_anz_blind))
+    if self.frame % 2 or CS.motor2_stock != getattr(self, 'motor2_last', CS.motor2_stock):  # 50hz / 20ms
+      can_sends.append(self.CCS.filter_motor2(self.packer_pt, CANBUS.cam, CS.motor2_stock, self.EPB_active))
+    if CS.bremse8_stock["COUNTER"] != self.bremse8_counter_last:
+      can_sends.append(self.CCS.filter_bremse8(self.packer_pt, CANBUS.cam, CS.bremse8_stock, self.EPB_active))
+    if CS.bremse11_stock["COUNTER"] != self.bremse11_counter_last:
+      can_sends.append(self.CCS.filter_bremse11(self.packer_pt, CANBUS.cam, CS.bremse11_stock, self.stopped))
+    if CS.gra_stock_values["COUNTER"] != self.gra_acc_counter_last:
+      can_sends.append(self.CCS.filter_GRA_Neu(self.packer_pt, CANBUS.cam, CS.gra_stock_values, resume = self.stopped and (self.frame % 100 < 50)))
 
-      press_cancel = CC.cruiseControl.cancel
-      press_resume = CC.cruiseControl.resume or (standing_resume_spam and spam_window)
-
-      if press_cancel or press_resume:
-        counter = (CS.gra_stock_values["COUNTER"] + 1) % 16
-        can_sends.append(self.CCS.create_acc_buttons_control(self.packer_pt, ext_bus, CS.gra_stock_values, counter,
-                                                             cancel=press_cancel, resume=press_resume))
+    self.motor2_last = CS.motor2_stock
+    self.acc_sys_counter_last = CS.acc_sys_stock["COUNTER"]
+    self.acc_anz_counter_last = CS.acc_anz_stock["COUNTER"]
+    self.bremse8_counter_last = CS.bremse8_stock["COUNTER"]
+    self.bremse11_counter_last = CS.bremse11_stock["COUNTER"]
 
     new_actuators = actuators.copy()
     new_actuators.steer = self.apply_steer_last / self.CCP.STEER_MAX

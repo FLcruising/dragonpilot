@@ -240,6 +240,12 @@ class CarState(CarStateBase):
     if ret.cruiseState.speed > 70:  # 255 kph in m/s == no current setpoint
       ret.cruiseState.speed = 0
 
+    self.acc_sys_stock = ext_cp.vl["ACC_System"]
+    self.acc_anz_stock = ext_cp.vl["ACC_GRA_Anzeige"]
+    self.motor2_stock = pt_cp.vl["Motor_2"]
+    self.bremse8_stock = pt_cp.vl["Bremse_8"]
+    self.bremse11_stock = pt_cp.vl["Bremse_11"]
+
     # Update button states for turn signals and ACC controls, capture all ACC button state/config for passthrough
     ret.leftBlinker, ret.rightBlinker = self.update_blinker_from_stalk(300, pt_cp.vl["Gate_Komf_1"]["GK1_Blinker_li"],
                                                                             pt_cp.vl["Gate_Komf_1"]["GK1_Blinker_re"])
@@ -435,6 +441,8 @@ class CarState(CarStateBase):
       ("Motor_3", 100),     # From J623 Engine control module
       ("Airbag_1", 50),     # From J234 Airbag control module
       ("Bremse_5", 50),     # From J104 ABS/ESP controller
+      ("Bremse_8", 50),     # From J104 ABS/ESP controller
+      ("Bremse_11", 10),    # From J104 ABS/ESP controller
       ("GRA_Neu", 50),      # From J??? steering wheel control buttons
       ("Kombi_1", 50),      # From J285 Instrument cluster
       ("Motor_2", 50),      # From J623 Engine control module
