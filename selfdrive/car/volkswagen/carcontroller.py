@@ -161,7 +161,7 @@ class CarController:
 
     # *** Below here is for OEM+ behavior modification of OEM ACC *** #
     # Modify Motor_2, Bremse_8, Bremse_11
-    if CP.carFingerprint in PQ_CARS:
+    if self.CCS == pqcan:
       self.stopping = CS.acc_sys_stock["ACS_Anhaltewunsch"] and (CS.out.vEgoRaw <= 1 or self.stopping)
       self.stopped = self.EPB_enable and (CS.out.vEgoRaw == 0 or (self.stopping and self.stopped))
 
