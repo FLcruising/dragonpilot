@@ -430,6 +430,8 @@ class CarState(CarStateBase):
       ("GRA_Zeitluecke", "GRA_Neu"),             # ACC button, time gap adj
       ("COUNTER", "GRA_Neu"),                    # ACC button, message counter
       ("GRA_Sender", "GRA_Neu"),                 # ACC button, CAN message originator
+      ("COUNTER", "Bremse_8"),
+      ("COUNTER", "Bremse_11"),
     ]
 
     checks = [
@@ -528,8 +530,13 @@ class PqExtraSignals:
   # Additional signal and message lists for optional or bus-portable controllers
   fwd_radar_signals = [
     ("ACS_Typ_ACC", "ACC_System"),               # Basic vs FtS (no SnG support on PQ)
+    ("ACS_Anhaltewunsch", "ACC_System"),
+    ("ACS_Sta_ADR", "ACC_System"),
+    ("ACS_Sollbeschl", "ACC_System"),
+    ("COUNTER", "ACC_System"),
     ("ACA_StaACC", "ACC_GRA_Anzeige"),           # ACC drivetrain coordinator status
     ("ACA_V_Wunsch", "ACC_GRA_Anzeige"),         # ACC set speed
+    ("COUNTER", "ACC_GRA_Anzeige"),
   ]
   fwd_radar_checks = [
     ("ACC_System", 50),                          # From J428 ACC radar control module
