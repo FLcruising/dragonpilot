@@ -44,7 +44,6 @@ class CarInterface(CarInterfaceBase):
       # The PQ port is in dashcam-only mode upstream, but enabled on this C2 Final Edition branch
       # The six-minute maximum steering timer is NOT worked around at this time
       # Panda ALLOW_DEBUG firmware required.
-      # ret.dashcamOnly = True
 
     else:
       # Set global MQB parameters
@@ -101,8 +100,6 @@ class CarInterface(CarInterfaceBase):
     elif candidate == CAR.PASSAT_NMS:
       ret.mass = 1503 + STD_CARGO_KG
       ret.wheelbase = 2.80
-      ret.minEnableSpeed = 20 * CV.KPH_TO_MS  # ACC "basic", no FtS
-      ret.minSteerSpeed = 50 * CV.KPH_TO_MS
       ret.steerActuatorDelay = 0.2
 
     elif candidate == CAR.POLO_MK6:
